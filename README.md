@@ -113,8 +113,6 @@ Constraints and expectations governing agent selection and execution, including:
 | Goal | Resource |
 |---|---|
 | Understand the value proposition | [opensemantics.org/sadar](https://opensemantics.org/sadar) |
-| Read the specification | [`/spec/sadar-core-v0.9.md`](./spec/sadar-core-v0.9.md) |
-| Understand manifest structure | [`/spec/manifest-schema.json`](./spec/manifest-schema.json) |
 | Contribute to the specification | [`CONTRIBUTING.md`](./docs/6_Contributing.md) |
 | Review governance | [`GOVERNANCE.md`](./docs/5_Governance.md) |
 | Trademark usage | [`TRADEMARKS.md`](./TRADEMARKS.md) |
