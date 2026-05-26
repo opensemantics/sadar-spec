@@ -2,464 +2,669 @@
 
 Semantic Agent Discovery and Attribution Registry
 
-Discovery Standards
+Discovery and Invocation
 
-|  |  |
-| --- | --- |
-| **Version** | 0.9 DRAFT |
-| **Date** | April 2026 |
-| **Status** | Draft for Public Comment |
-| **Maintained by** | OpenSemantics.org |
-| **License** | Community Specification License 1.0 |
+|                   |                                     |
+| ----------------- | ----------------------------------- |
+| **Version**       | 0.10 DRAFT                          |
+| **Date**          | May 2026                            |
+| **Status**        | Draft for Public Comment            |
+| **Maintained by** | OpenSemantics.org                   |
+| **License**       | Community Specification License 1.0 |
 
-# Table of Contents
+> **Revision note (non-normative).** This document supersedes the prior
+> 0.9 Discovery draft, which described a probabilistic / natural-language
+> discovery model, a simplified manifest, an `X-SADAR-Originator` header
+> identity model, and a CC BY 4.0 license. Those elements are obsolete.
+> The current architecture is deterministic bilateral matching, the
+> requester/server manifest model with four NFR categories, Signed
+> Context Token (SCT) authorization-context propagation, and the
+> Community Specification License 1.0. Where authoritative detail lives
+> in a companion document, this document references it rather than
+> restating it.
 
-[Table of Contents 1](#_Toc226214082)
-
-[1. Introduction 1](#_Toc226214083)
-
-[1.1 Design Principles 1](#_Toc226214084)
-
-[1.2 Relationship to Other Standards 1](#_Toc226214085)
-
-[2. Core Concepts 1](#_Toc226214086)
-
-[2.1 The SADAR Manifest 1](#_Toc226214087)
-
-[2.1.1 Manifest Identity Fields 1](#_Toc226214088)
-
-[2.1.2 Manifest Semantic Fields 1](#_Toc226214089)
-
-[2.1.3 Manifest Invocation Contract Fields 1](#_Toc226214090)
-
-[3. Registry Protocol 1](#_Toc226214091)
-
-[3.1 Transport Requirements 1](#_Toc226214092)
-
-[3.2 Agent Authentication to the Registry 1](#_Toc226214093)
-
-[3.3 Search Request 1](#_Toc226214094)
-
-[3.3.1 Search Request Body 1](#_Toc226214095)
-
-[3.3.2 Search Response 1](#_Toc226214096)
-
-[4. The Resolver Contract 1](#_Toc226214097)
-
-[4.1 Resolver Input 1](#_Toc226214098)
-
-[4.2 Resolver Output 1](#_Toc226214099)
-
-[5. Invocation Requirements 1](#_Toc226214100)
-
-[5.1 Identity Requirements 1](#_Toc226214101)
-
-[5.1.1 Agent Identity 1](#_Toc226214102)
-
-[5.1.2 Originator Identity 1](#_Toc226214103)
-
-[5.1.3 Transactional Context 1](#_Toc226214104)
-
-[5.2 Transport Requirements for Invocation 1](#_Toc226214105)
-
-[5.3 Response Handling Requirements 1](#_Toc226214106)
-
-[6. Registry Architecture 1](#_Toc226214107)
-
-[6.1 Registry Identity 1](#_Toc226214108)
-
-[6.2 Federation 1](#_Toc226214109)
-
-[6.3 Registry of Registries 1](#_Toc226214110)
-
-[7. Conformance 1](#_Toc226214111)
-
-[7.1 Conformance Levels 1](#_Toc226214112)
-
-[7.2 Implementation Latitude Summary 1](#_Toc226214113)
-
-[8. Security Considerations 1](#_Toc226214114)
-
-[8.1 mTLS as the Trust Foundation 1](#_Toc226214115)
-
-[8.2 Credential Completeness 1](#_Toc226214116)
-
-[8.3 Manifest Integrity 1](#_Toc226214117)
-
-[8.4 Business Process Scope Enforcement 1](#_Toc226214118)
-
-[Appendix A: Normative References 1](#_Toc226214119)
-
-[Appendix B: Example Manifest 1](#_Toc226214120)
+---
 
 # 1. Introduction
 
-SADAR — the Semantic Agent Discovery and Authorization Registry — is an open standard that defines how autonomous AI agents discover callable services and are authorized to invoke them. SADAR provides a uniform protocol for registering services with semantic metadata, searching that registry, and executing invocations with verifiable identity propagation.
+SADAR — the Semantic Agent Discovery and Attribution Registry — is an
+open specification that defines how autonomous AI agents discover
+callable agents, tools, resources, and processes, and how they invoke
+them with verifiable identity and attribution propagated end-to-end.
+SADAR provides a uniform protocol for registering capabilities with
+machine-readable, standards-grounded metadata, matching that metadata
+deterministically and bilaterally, and executing invocations that carry
+the originator's scope of authority across every trust boundary.
 
-SADAR is intentionally narrow in scope. It specifies the interfaces, credential structures, transport requirements, and behavioral contracts that ensure interoperability across implementations. It does not specify how registries store or index manifests, how policy decisions are made, or how invocations are physically executed. These are implementation concerns deliberately left to the implementer.
+SADAR is intentionally narrow in scope. It specifies interfaces,
+manifest and credential structures, transport requirements, and
+behavioral contracts that ensure interoperability across
+implementations. It does not specify how registries store or index
+manifests, how authorization decisions are enforced, how a resolver
+ranks candidates, or how invocations are physically executed. Those are
+implementation concerns deliberately left to the implementer.
 
-|  |  |
+| | |
 | --- | --- |
-| **SCOPE NOTE** | This document defines the SADAR standard. It normatively specifies what compliant implementations MUST, SHOULD, and MAY do. It does not describe any particular implementation. The key words MUST, MUST NOT, REQUIRED, SHALL, SHOULD, RECOMMENDED, MAY, and OPTIONAL are used as defined in RFC 2119. |
+| **SCOPE NOTE** | This document is a protocol-level reading of discovery and invocation within the SADAR specification. It normatively specifies what conformant implementations MUST, SHOULD, and MAY do, and references the companion documents listed in §1.4 for authoritative detail. The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, MAY, and OPTIONAL are used as defined in RFC 2119 / RFC 8174 when, and only when, they appear in all capitals. |
 
 ## 1.1 Design Principles
 
-* Semantic grounding: services are described by what they do, not how they are called
-* Identity completeness: every invocation carries the full three-part identity (agent, originator, context)
-* Transport security: mutual TLS is mandatory for all SADAR protocol interactions
-* Implementation freedom: SADAR specifies contracts, not implementations
-* Auditability: the standard enables complete chain-of-custody without mandating specific audit mechanisms
+- **Semantic grounding** — capabilities and data are described by
+  reference to published industry standards, not by free-text prose.
+- **Determinism** — given identical inputs and normative fields,
+  conformant registries produce identical candidate sets, regardless of
+  operator.
+- **Bilateral agreement** — discovery returns a candidate only when both
+  the requester's requirements and the provider's requirements are
+  satisfied.
+- **Attribution completeness** — every invocation carries verifiable
+  agent identity, originator authorization context, and transactional
+  context.
+- **Registry isolation** — the registry is a discovery-time component
+  only; it is never in the runtime call path and never holds sensitive
+  operational data.
+- **Implementation freedom** — SADAR specifies contracts, not
+  implementations; storage, indexing, ranking, enforcement, and
+  execution are implementer concerns.
+- **Neutrality** — discovery and invocation are independent of cloud,
+  model provider, agentic framework, and hosting model.
 
 ## 1.2 Relationship to Other Standards
 
-SADAR builds on and references the following standards:
+SADAR builds on and references existing standards rather than replacing
+them:
 
-* RFC 6749 / RFC 9068 — OAuth 2.0 and JWT-based authorization
-* RFC 8705 — OAuth 2.0 Mutual TLS Client Authentication
-* OpenTelemetry — context propagation and trace correlation
-* OpenAPI 3.x — service interface description
-* JSON Schema Draft 2020-12 — data contract validation
-* W3C DID — decentralized identifier syntax for service IRIs
+- **MCP / A2A** — SADAR provides semantic discovery and attribution
+  above MCP tool invocation and A2A agent interaction; it defines the
+  normative tool interface for each delivery mechanism (§5.6) but does
+  not define transport.
+- **OIDC / OAuth 2.0** (RFC 6749, RFC 9068) — agent and originator
+  authentication and token structure.
+- **OAuth 2.0 Mutual-TLS** (RFC 8705) — channel-bound client
+  authentication.
+- **JWS / JWE** (RFC 7515 / RFC 7516) — manifest signing and SCT
+  structure.
+- **JWK / JWKS** (RFC 7517) — published key material for verification.
+- **OpenTelemetry / W3C Trace Context / W3C Baggage** — transactional
+  context propagation and trace correlation.
+- **Industry grounding standards** — O\*NET, NAICS, APQC PCF, HL7, X12,
+  ISO 20022, and others, referenced by IRI (§2.3).
+
+## 1.3 Normative Language
+
+The key words are interpreted per RFC 2119 / RFC 8174 as noted in the
+Scope Note above.
+
+## 1.4 Companion Documents
+
+This document is part of the SADAR specification publication set. Where
+this document references content by section, the authoritative content
+lives in the cited companion.
+
+| Document | Authoritative for |
+| --- | --- |
+| `2_Scope.md` | Specification scope, normative element catalog (§5.1), and IP licensing boundary. |
+| NFR Schema | Manifest schema, the four NFR categories, three-tier matching strictness, the bilateral match algorithm, and registry-side validation. |
+| SCT Operations | Signed Context Token structure, claims, and the five chain operations. |
+| Trust Models | The four originator trust models, bilateral negotiation, and asserted-model server-side validation. |
+| Telemetry Record and Repatriation | Per-invocation Telemetry Record schema, OTel span structure, provenance attribution, and governed repatriation. |
+| searchAndInvoke Telemetry and Authentication | Telemetry Helper API, repatriation trigger, and the OIDC scope namespace. |
+| Risk Score Specification | Cumulative in-flight risk score data model and propagation. |
+| Conformance Specification | Conformance criteria, test suites, and validation rules. |
+
+---
 
 # 2. Core Concepts
 
-## 2.1 The SADAR Manifest
+## 2.1 Records in the Registry
 
-The SADAR manifest is the central artifact of the standard. It is the semantic description of a callable service — what it does, what data it accepts and returns, and the policy constraints under which it may be invoked. The manifest is registered in the SADAR registry and is the basis for both search and authorization.
+A SADAR-conformant registry holds three categories of top-level record,
+all of which are publisher-signed manifests:
 
-A manifest is immutable once registered. Updates create new versioned manifests. The registry retains all versions with their lifecycle state (ACTIVE, DEPRECATED, REVOKED).
+| Record | Description |
+| --- | --- |
+| **Entity** | The organizational unit that owns Entries, Registries, and subordinate Entities. Every record traces ownership through the entity hierarchy to a single, legally accountable root entity. |
+| **Entry** | A discoverable item published by an owning Entity. Entry subtypes are Agent, Tool, Resource, and Process (§2.2). |
+| **Registry** | A peer registry record, used for federation and replication. Registries are themselves signed manifests, owned by an Entity, and discoverable on the same protocol surface as Entries. |
 
-### 2.1.1 Manifest Identity Fields
+The discoverable **Entry** subtypes:
 
-|  |  |  |
+| Subtype | Description |
+| --- | --- |
+| **Agent** | An autonomous or semi-autonomous actor. An Agent manifest carries a `requester` role section, a `server` role section, or both. An Agent exposing multiple server endpoints publishes one manifest per endpoint. |
+| **Tool** | A general-purpose technical capability not tied to a specific business function. Tools advertise as servers. |
+| **Resource** | An accessible artifact — database, file, configuration, data set — made available to agents or tools. Resources advertise as servers. |
+| **Process** | A definition of a multi-step (or, in the degenerate case, single-step) flow, grounded in a standard process taxonomy. A Process declares steps, sequencing, gating conditions, prerequisites, and exclusions. Process entries provide scaffolding for planner agents and a basis for dependency enforcement; they do not carry an invocation endpoint and are executed by Agents that reference them. |
+
+Every record carries a `home_registry_id` identifying its registry of
+origin, set at first registration and preserved across all forwarding,
+replication, and federation operations (§6.4).
+
+## 2.2 The Manifest
+
+The manifest is the central artifact of SADAR: the publisher-signed,
+machine-readable description of a record. A manifest is immutable once
+registered; any change produces a new versioned manifest with a new
+signature. The registry retains versions with their lifecycle state.
+
+> The complete, authoritative manifest schema — field names, data types,
+> serialization, the four NFR categories, the data-field and
+> process-reference vocabularies, and matching semantics — is defined in
+> the **NFR Schema** companion document. This section gives the
+> structural overview required to read the discovery and invocation
+> protocol; it is not the authoritative schema.
+
+**Common fields** (every manifest, per `2_Scope.md` §5.1.2): a globally
+unique manifest identifier, manifest version, schema version, lifecycle
+state (one of draft, active, deprecated, superseded, retired),
+`home_registry_id`, a reference to the owning entity, and a JWS
+signature over the canonicalized content.
+
+**Role sections.** An Agent manifest may carry one or both of two
+symmetric role sections, expressed in the same vocabulary; interpretation
+depends on the section a field appears in:
+
+| Section | Direction | Interpretation |
 | --- | --- | --- |
-| **Field** | **Required** | **Description** |
-| entity\_iri | **REQUIRED** | Globally unique IRI identifying the service entity. Format: urn:sadar:{org}:{domain}:{name} |
-| entry\_uuid | **REQUIRED** | Immutable UUID for this manifest version. Generated at registration time. |
-| version | **REQUIRED** | Semantic version string (e.g., 2.1.0). Monotonically increasing within an entity\_iri. |
-| registered\_at | **REQUIRED** | ISO 8601 UTC timestamp of registration. |
-| status | **REQUIRED** | One of: ACTIVE, DEPRECATED, REVOKED |
-| soft\_ttl\_seconds | **REQUIRED** | Duration after which clients SHOULD revalidate this manifest version. |
-| hard\_ttl\_seconds | **REQUIRED** | Duration after which clients MUST NOT use this manifest version without revalidation. |
+| `requester` | Outbound | What the agent wants when searching for and invoking other capabilities; matched against provider advertisements at discovery. |
+| `server` | Inbound | What the agent advertises as its own callable capability, and — in a `requirements_of_requester` sub-section — what it requires of incoming requesters. |
 
-### 2.1.2 Manifest Semantic Fields
+Tools and Resources carry a `server` section only. Many agents declare
+both sections, reflecting the operational reality that agents both call
+and are called.
 
-|  |  |  |
-| --- | --- | --- |
-| **Field** | **Required** | **Description** |
-| display\_name | **REQUIRED** | Human-readable service name. |
-| description | **REQUIRED** | Natural language description of the service's purpose and capabilities. This field is the primary input to semantic search. |
-| capability\_tags | **REQUIRED** | Array of canonical capability identifiers. RECOMMENDED source: O\*NET-SOC task taxonomy or implementer-defined controlled vocabulary. |
-| domain | **REQUIRED** | Business domain classification (e.g., healthcare.claims, finance.payment). |
-| operations | **REQUIRED** | Array of operation descriptors. Each operation has a name, description, input\_schema, and output\_schema (JSON Schema). |
-| data\_classification | **REQUIRED** | Sensitivity level of data this service handles. Implementer-defined enumeration; SADAR requires this field exist. |
+**Section element vocabulary.** Each role section carries declarations
+across:
 
-### 2.1.3 Manifest Invocation Contract Fields
+| Element | Content |
+| --- | --- |
+| Process Reference | The process(es) and step(s) the manifest is associated with, with prerequisites and exclusions. In `requester`, two distinct references appear: the requester's own upstream context, and the target process it wants the provider to perform. |
+| Data Fields | IRI-based references to data definitions in published standards (X12, HL7, ISO 20022, and others), each carrying a strictness flag. |
+| Financial NFRs | Cost, pricing, payment methods, billing. |
+| Operational NFRs | Performance, throughput, availability, technical limits. |
+| Governance NFRs | Compliance frameworks, data sovereignty, privacy, encryption, licensing. |
+| Protocol NFRs | SADAR-specific behaviors: supported trust models, role declarations, telemetry-repatriation participation and field lists, optional impact score. |
 
-SADAR does not specify invocation mechanics beyond the fields below. How a client physically calls the service is an implementation concern.
+**Strictness.** Every NFR field, process reference, data-field
+declaration, and exclusion carries one of three matching strictness
+flags — `OPTIONAL`, `MANDATORY`, or `MANDATORY_STRICT` — governing how a
+mismatch affects discovery (§3.4).
 
-|  |  |  |
-| --- | --- | --- |
-| **Field** | **Required** | **Description** |
-| endpoint\_uri | **REQUIRED** | The URI at which this service is callable. MUST be an HTTPS URI. |
-| protocol | **REQUIRED** | Transport protocol. SADAR-defined enumeration: REST, GRPC, GRAPHQL, WEBSOCKET, MESSAGE\_QUEUE, CUSTOM. |
-| auth\_schemes | **REQUIRED** | Array of OIDC client credential flows accepted by this service. At minimum one MUST be present. |
-| sla.timeout\_ms | **REQUIRED** | Maximum milliseconds the caller SHOULD wait before treating the invocation as failed. |
-| sla.max\_retries | **REQUIRED** | Maximum retry attempts before treating the invocation as permanently failed. |
-| policy\_tags | OPTIONAL | Opaque string tags consumed by the implementer's policy engine. SADAR does not define their semantics. |
+## 2.3 Semantic Grounding and IRIs
+
+Capabilities and data are grounded by Internationalized Resource
+Identifier (IRI) in published standards. SADAR does not define those
+standards; it defines how they are referenced as uniquely identified
+namespaces and how specific elements within them are addressed.
+
+| Dimension | Example grounding standards |
+| --- | --- |
+| Industry / entity | NAICS, ISIC, NACE, GICS; entity scoping via Moody's, S&P, and similar |
+| Process / task | APQC PCF; industry frameworks such as eTOM (telecom), BIAN (banking), SCOR (supply chain); O\*NET task taxonomy |
+| Operation / data | HL7, X12, ISO 20022, SWIFT, NCPDP; published APIs where standards are insufficient |
+
+SADAR-defined identifiers use the namespace pattern
+`urn:sadar:{category}:v{version}:{...}`. Ecosystem participants extending
+the vocabulary SHALL use their own organization-controlled namespaces and
+SHALL NOT use the `urn:sadar:` prefix.
+
+> **Semantic match is not similarity.** Within SADAR, *semantic* refers
+> to contextual business or technical meaning grounded in a shared
+> standard definition. A semantic match means two declarations are
+> grounded in the same definition — not that their names are
+> lexically or vectorally similar. SADAR matching does not use cosine
+> similarity or any probabilistic name comparison.
+
+---
 
 # 3. Registry Protocol
 
-## 3.1 Transport Requirements
+## 3.1 Transport
 
-All communication between SADAR clients and registries MUST use mutual TLS (mTLS) as defined in RFC 8705. Specifically:
+All communication between SADAR clients and registries SHALL use mutual
+TLS (mTLS) per RFC 8705:
 
-* The registry MUST present a TLS certificate signed by a recognized CA or federation trust anchor.
-* The client MUST present a TLS client certificate identifying the agent.
-* Certificate validation MUST be performed bidirectionally. Connections where either party cannot validate the other's certificate MUST be rejected.
-* TLS 1.3 is REQUIRED. TLS 1.2 MAY be accepted for legacy compatibility until December 31, 2027, after which it MUST be rejected.
+- The registry SHALL present a TLS certificate signed by a recognized CA
+  or federation trust anchor.
+- The client SHALL present a TLS client certificate identifying the
+  agent.
+- Certificate validation SHALL be bidirectional; connections where
+  either party cannot validate the other SHALL be rejected.
+- TLS 1.2 is the minimum; TLS 1.3 is RECOMMENDED. The algorithm and
+  minimum key strength are as declared in the relevant manifest per
+  `2_Scope.md` §5.1.8.1.
 
-## 3.2 Agent Authentication to the Registry
+## 3.2 Authentication to the Registry
 
-Before executing a search, the calling agent MUST authenticate to the registry using OIDC Client Credentials flow (RFC 6749 Section 4.4) over the established mTLS channel.
+Before searching, the calling agent SHALL authenticate to the registry
+using OIDC Client Credentials over the established mTLS channel, per the
+authentication baseline (`2_Scope.md` §5.1.8.1). The access token is a
+JWT carrying, at minimum, the agent's stable identifier, issuer,
+audience (including the registry identifier), expiry, and the SADAR scope
+authorizing the requested registry operation.
 
-The access token obtained MUST be a JWT conforming to RFC 9068 and MUST contain the following claims:
+SADAR registry-interaction scopes live in the `urn:sadar:scope:v1:*`
+namespace and include registry search, manifest resolution, registry
+listing, and health (see the **searchAndInvoke Telemetry and
+Authentication** companion for the complete scope set and TTL bounds).
 
-|  |  |  |
-| --- | --- | --- |
-| **Field** | **Required** | **Description** |
-| sub | **REQUIRED** | The agent's stable identifier. Used by the registry to scope the search. |
-| iss | **REQUIRED** | The token issuer URI. MUST be reachable for JWKS validation. |
-| aud | **REQUIRED** | MUST include the registry's entity IRI. |
-| scope | **REQUIRED** | MUST include sadar:search. MAY include sadar:register for manifest registration. |
-| exp | **REQUIRED** | Expiry time. The registry MUST reject tokens where exp is in the past. |
-| sadar\_agent\_id | **REQUIRED** | The SADAR-registered agent identifier. This is the lookup key for the agent's capability manifest. |
-
-The registry uses sadar\_agent\_id to retrieve the agent's capability manifest, which defines the scope of services this agent is permitted to discover.
-
-|  |  |
-| --- | --- |
-| **NOTE** | The registry does not validate business-level authorization. It returns the candidates matching both the search criteria and the agent's registered discovery scope. Business-level enforcement is the responsibility of the implementation layer invoked after discovery. |
+> The registry does not make or enforce business-level authorization
+> decisions. It returns candidates that satisfy bilateral matching and
+> the requester's registered discoverability scope. Authorization
+> enforcement is the responsibility of the providing entity and the
+> consuming implementation (§5, and `2_Scope.md` §5.2.6).
 
 ## 3.3 Search Request
 
-A conforming SADAR search request MUST be submitted as an HTTP POST to the registry's search endpoint. The Authorization header MUST carry the Bearer token obtained in Section 3.2.
+A search request conveys the requester's matching criteria so the
+registry can evaluate both directions of the bilateral match (§3.4). At
+minimum, the request conveys:
 
-### 3.3.1 Search Request Body
+- The requester's identity, sufficient for the registry to resolve and
+  verify the requester's published manifest and to apply its
+  discoverability scope.
+- The **target process** and capability the requester seeks, grounded by
+  IRI.
+- The requester's relevant `requester`-section declarations — data-field
+  requirements, NFR constraints, and supported trust models — against
+  which the provider's `requirements_of_requester` will be evaluated.
 
-|  |  |  |
-| --- | --- | --- |
-| **Field** | **Required** | **Description** |
-| query | **REQUIRED** | Natural language description of the capability being sought. The registry uses this for semantic matching against manifest description and capability\_tags fields. |
-| domain\_filter | OPTIONAL | Restrict results to manifests within this domain. |
-| operation\_filter | OPTIONAL | Restrict results to manifests offering this named operation. |
-| data\_classification\_max | OPTIONAL | Exclude manifests whose data\_classification exceeds this level. |
-| max\_results | OPTIONAL | Maximum candidate count to return. Default: 10. Maximum: 50. |
-| business\_process\_id | OPTIONAL | If the search occurs within a declared business process context, this IRI identifies that process. Registries MAY use this to scope results to services authorized for that process. |
+> The authoritative request and response wire formats are defined in the
+> Registry Protocol and Resolver Contract sections of `2_Scope.md`
+> (§5.1.6, §5.1.7) and the NFR Schema companion. Implementations SHALL
+> NOT introduce request or response fields that alter the candidate set
+> a fully conformant registry would return for the same normative inputs
+> (`2_Scope.md` §5.2.2).
 
-### 3.3.2 Search Response
+## 3.4 Bilateral Matching
 
-A successful search response MUST return HTTP 200 with the following body structure:
+The match operates in two directions, both of which SHALL succeed for a
+candidate to be returned:
 
-{
+- **Direction 1** — the requester's declared wants (its `requester`
+  section) are evaluated against the provider's advertisements (its
+  `server` section).
+- **Direction 2** — the provider's requirements of the requester (its
+  `server.requirements_of_requester` sub-section) are evaluated against
+  the requester's self-declarations.
 
-"request\_id": "<uuid>",
+Each field is evaluated per its strictness flag, producing one of three
+per-direction outcomes:
 
-"query\_echo": "<original query string>",
+| Outcome | Condition |
+| --- | --- |
+| **FULL_MATCH** | All `MANDATORY` and `MANDATORY_STRICT` fields satisfied; `OPTIONAL` preferences met or unmet without exclusion. |
+| **PARTIAL_MATCH** | At least one `MANDATORY` (non-strict) field is a partial match, surfaced to the resolver for adjudication; no `MANDATORY_STRICT` field is unsatisfied. |
+| **NO_MATCH** | At least one `MANDATORY_STRICT` field is unsatisfied; the candidate is excluded from results entirely, without notification. |
 
-"candidates": [
+The combined outcome across the two directions is the stricter of the
+two. Conformant registries SHALL produce consistent results for
+identical inputs and normative fields, regardless of operator. The
+authoritative match algorithm is defined in the NFR Schema companion.
 
-{
+Provider requirements prevent discovery by non-qualifying requesters:
+this is the **right of refusal** at the discovery layer (a corresponding
+right of refusal applies at invocation, §5.2).
 
-"entity\_iri": "urn:sadar:org:domain:service",
+## 3.5 Search Response
 
-"entry\_uuid": "<uuid>",
+The response returns the candidate set surviving bilateral matching, each
+candidate carrying its `FULL_MATCH` or `PARTIAL_MATCH` classification.
+Candidates failing a `MANDATORY_STRICT` requirement are excluded
+entirely. The response conveys, per candidate, the information the
+resolver and the subsequent invocation require — including the selected
+target's identity, its declared invocation and authentication endpoints
+(resolved from its manifest), its negotiated trust model context, and
+applicable TTLs. Error responses use the `urn:sadar:error:v1:*`
+namespace.
 
-"version": "2.1.0",
+Each entry declares a discovery TTL governing how long a discovered
+result may be honored before rediscovery, and federation-related TTLs
+govern replication scope (§6.3).
 
-"display\_name": "...",
-
-"description": "...",
-
-"relevance\_score": 0.92,
-
-"operations": [ ... ],
-
-"endpoint\_uri": "https://...",
-
-"protocol": "REST",
-
-"auth\_schemes": [ ... ],
-
-"sla": { "timeout\_ms": 5000, "max\_retries": 3 },
-
-"soft\_ttl\_seconds": 3600,
-
-"hard\_ttl\_seconds": 86400
-
-}
-
-]
-
-}
-
-Error responses MUST use standard HTTP status codes with a JSON error body containing error\_code, error\_description, and request\_id fields.
+---
 
 # 4. The Resolver Contract
 
-After receiving search candidates, the searchAndInvoke implementation MUST execute a resolver to select the service to invoke. The resolver is a caller-supplied component. SADAR specifies the contract the resolver must honor; it does not specify resolver logic.
+After receiving the classified candidate set, the `searchAndInvoke`
+implementation SHALL execute a resolver to select the target to invoke.
+The resolver is supplied by the requesting organization. SADAR specifies
+the contract the resolver SHALL honor; it does not specify resolver
+logic.
 
 ## 4.1 Resolver Input
 
-The implementation MUST provide the resolver with the complete candidate list returned by the registry, including all manifest fields. The implementation MUST also provide the original search query and any context it deems relevant.
+The implementation SHALL provide the resolver with the complete
+classified candidate set returned by bilateral matching, including the
+`FULL_MATCH` / `PARTIAL_MATCH` classification on each candidate, together
+with the original search criteria and any context the implementation
+deems relevant.
 
 ## 4.2 Resolver Output
 
-The resolver MUST return exactly one candidate from the input list, identified by its entry\_uuid. Returning a service not present in the input list is a protocol violation.
+The resolver SHALL return exactly one candidate from the input set, or a
+defined error. Returning a target not present in the input set is a
+protocol violation.
 
-|  |  |
-| --- | --- |
-| **RATIONALE** | The resolver may use any logic — LLM ranking, rule-based selection, user confirmation, or a combination. SADAR does not constrain this because selection strategy is a domain-specific concern. Constraining it would limit legitimate use cases. |
+## 4.3 Resolver Constraints
+
+The resolver:
+
+- MAY prefer `FULL_MATCH` candidates and adjudicate `PARTIAL_MATCH`
+  candidates per its own policy.
+- SHALL NOT modify, augment, or substitute candidates outside the set
+  returned by bilateral matching.
+- SHALL NOT perform independent registry queries or otherwise bypass
+  bilateral matching results.
+
+Selection logic — rule-based, model-assisted, human-in-the-loop, or
+otherwise — is implementer discretion within these constraints.
+Implementation patterns for the resolver are non-normative and described
+in the SADAR Reference Architecture.
+
+---
 
 # 5. Invocation Requirements
 
-Once a service is selected by the resolver, the implementation MUST invoke it. SADAR specifies the credential propagation and identity requirements for invocation. It does not specify the transport, transformation, or routing mechanism — these are implementation concerns.
+Once the resolver selects a target, the implementation SHALL invoke it.
+SADAR specifies the identity, authorization-context, and verification
+requirements for invocation; it does not specify the transport,
+transformation, or routing mechanism, which are implementation concerns.
 
-## 5.1 Identity Requirements
+## 5.1 Identity and Authorization Context
 
-Every SADAR-compliant invocation MUST carry a three-part identity structure:
+Every conformant invocation carries three complementary elements.
 
-### 5.1.1 Agent Identity
+### 5.1.1 Agent Authentication
 
-The calling agent MUST authenticate to the target service using OIDC Client Credentials (RFC 6749 Section 4.4) with an access token containing at minimum:
+The calling agent SHALL authenticate to the target using OIDC Client
+Credentials over mTLS per the authentication baseline (`2_Scope.md`
+§5.1.8.1), with a token scoped to the operation being invoked
+(`urn:sadar:scope:v1:invocation:invoke` by default). The token issuer is
+the **target's** authentication endpoint declared in the target's
+manifest; the registry is never the token issuer.
 
-* sub: the agent's stable identifier
-* sadar\_agent\_id: the SADAR-registered agent identifier
-* aud: MUST include the target service's entity\_iri
-* scope: MUST include at minimum the operation being invoked
+### 5.1.2 Originator Authorization Context (SCT)
 
-### 5.1.2 Originator Identity
+The originator's scope of authority SHALL be propagated using a Signed
+Context Token (SCT) — a JWS-inside-JWE token carrying authorization
+claims attested at each trust-boundary crossing. The SCT chain across
+boundaries is the cryptographically attested record of how authorization
+context evolved through the flow.
 
-The identity of the human or system that initiated the workflow MUST be propagated to the target service. The originator identity MUST be carried as a JWT in the X-SADAR-Originator HTTP header. This token MUST be validated by the implementation before invocation and MUST contain:
+The trust model under which the originator's identity propagates is one
+of four — `direct_auth`, `asserted`, `impersonation`, or `deputy` —
+negotiated bilaterally at discovery via the `supported_trust_models`
+Protocol NFR. The SCT and its five chain operations (Open, Continue,
+Hold, Authoritative Carry, Close) are defined in the **SCT Operations**
+companion; the trust models, negotiation algorithm, and asserted-model
+validation are defined in the **Trust Models** companion.
 
-* sub: the originator's stable identifier
-* iss: the originator's identity provider
-* exp: token expiry — MUST not be in the past at time of invocation
-* auth\_time: the time the originator originally authenticated
-
-|  |  |
-| --- | --- |
-| **REQUIREMENT** | Implementations MUST NOT allow originator credentials to be substituted, fabricated, or omitted. An invocation without valid originator credentials is a protocol violation regardless of the validity of the agent credentials. |
+> This replaces the bespoke originator-header mechanism of earlier
+> drafts. Originator identity and authority travel in the SCT, not in a
+> standalone HTTP header.
 
 ### 5.1.3 Transactional Context
 
-The implementation MUST propagate an OpenTelemetry trace context per the W3C Trace Context specification (traceparent / tracestate headers). This binds the invocation to the observable execution chain.
+The implementation SHALL propagate OpenTelemetry context per W3C Trace
+Context (`traceparent` / `tracestate`) and W3C Baggage, binding the
+invocation to the observable execution chain. Where the invocation occurs
+within a declared process, the process identifier SHALL be carried in
+OTel Baggage. The risk-score adjustment list SHALL be carried in OTel
+Baggage per the Risk Score companion. Implementations SHALL NOT strip
+`urn:sadar:`-prefixed baggage received from upstream callers.
 
-If the invocation occurs within a declared business process, the business process manifest identifier MUST be carried as OpenTelemetry baggage:
+## 5.2 Bilateral Manifest Verification at Invocation
 
-* Key: sadar.business\_process\_id — IRI of the business process manifest
-* Key: sadar.business\_process\_version — version of the business process manifest
+A providing entity SHALL verify the manifest of any incoming requester at
+invocation time, independent of any registry pre-screen. Verification
+SHALL confirm that the requester's manifest signature verifies against
+the requester's registry-published key material, that the manifest is in
+an active lifecycle state, and that the bilateral match succeeds for the
+invocation context. For `asserted`-model invocations, the provider SHALL
+additionally apply the SCT-claim validation of the **Trust Models**
+companion (asserter identity, originator namespacing, role-claim
+validation with default-role handling, trust-model match).
 
-Implementations MAY add additional baggage keys using the sadar. prefix namespace. Implementations MUST NOT strip baggage keys with the sadar. prefix received from upstream callers.
+Verification is fail-closed: on any failure the provider SHALL reject the
+invocation with a structured `urn:sadar:error:v1:*` error and SHALL NOT
+proceed under reduced trust. The registry pre-screen is a discovery-time
+convenience, not a substitute for invocation-time verification.
+Verification results MAY be cached within the manifest's declared
+discovery TTL.
 
-## 5.2 Transport Requirements for Invocation
+This is the **right of refusal** at the invocation layer.
 
-* Invocations MUST be made over HTTPS.
-* Implementations SHOULD use mTLS for invocation transport. If mTLS is not available for the target service, the implementation MUST log this condition.
-* Implementations MUST respect the sla.timeout\_ms and sla.max\_retries values from the selected manifest.
+## 5.3 Transport for Invocation
 
-## 5.3 Response Handling Requirements
+- Invocations SHALL be made over a secure transport; mTLS is RECOMMENDED
+  for the invocation channel, and where it is not available the condition
+  SHOULD be logged.
+- Implementations SHALL respect the operational NFRs declared in the
+  selected manifest (timeouts, retry limits, rate limits).
 
-* Implementations MUST validate that the response conforms to the selected operation's output\_schema as declared in the manifest.
-* Implementations MUST NOT pass a schema-invalid response to the calling agent without logging the violation.
-* Implementations MUST propagate the OTel trace context on the response path.
+## 5.4 Response Handling
 
-# 6. Registry Architecture
+- Implementations SHOULD validate responses against the selected
+  operation's declared data contract before passing them to the calling
+  agent, and SHOULD log violations.
+- Implementations SHALL propagate OTel trace context on the response
+  path.
+
+## 5.5 Telemetry and Repatriation
+
+Every invocation produces a per-invocation Telemetry Record — the
+canonical persistent audit artifact — accessed only through the SADAR
+Telemetry Helper API. Every conformant span carries provenance
+attribution identifying the issuing entity, agent, and environment. Where
+repatriation is bilaterally declared and matched at discovery, the
+provider returns redacted trace fragments to its immediate caller at
+trust-boundary crossings, preserving a normative set of non-redactable
+structural fields. The Telemetry Record schema, span structure,
+provenance attribution, and repatriation mechanics are defined in the
+**Telemetry Record and Repatriation** and **searchAndInvoke Telemetry and
+Authentication** companions.
+
+---
+
+# 6. Registry Architecture and Federation
 
 ## 6.1 Registry Identity
 
-A SADAR registry MUST be identified by a stable IRI in the form urn:sadar:registry:{org}:{name}. This IRI MUST be included in all registry responses.
+A registry SHALL be identified by a stable identifier and SHALL itself be
+a signed manifest owned by an accountable Entity, discoverable on the
+same protocol surface as Entries.
 
-## 6.2 Federation
+## 6.2 Registry Types
 
-SADAR supports federated registry deployments. A compliant registry MAY forward search queries to peer registries and aggregate results. Federation topology is implementation-defined. SADAR requires only that:
+SADAR defines six registry roles: Provider, Marketplace, Industry,
+Community, Internal, and Registry of Registries. A registry's role and
+its operational, licensing, and billing NFRs are declared in its
+manifest.
 
-* Results returned to the caller indicate which registry sourced each candidate.
-* mTLS is used for registry-to-registry communication.
-* Deduplication is performed on (entity\_iri, entry\_uuid) pairs before results are returned to the caller.
+## 6.3 Federation
 
-## 6.3 Registry of Registries
+Registries may operate independently or participate in a federated
+network governed by the Directory of Authorized Registries.
 
-Implementations MAY designate a Registry of Registries (RoR) as the authoritative trust anchor for federation topology. The RoR publishes the set of known registries, their IRIs, their trust certificates, and their replication relationships. SADAR does not mandate RoR deployment but recommends it for enterprise-scale deployments.
+- Conformant registries SHALL reject forwarding and replication requests
+  from registries not listed in the Directory of Authorized Registries.
+- Between authorized registries, a forwarding or replication request may
+  be declined only if it violates the receiving registry's declared NFRs.
+- **Query forwarding** — registries may forward queries to other
+  authorized registries within their terms of service.
+- **Content replication** — pull-based replication of specific content;
+  replicated entries are augmented with their home registry reference so
+  discovery and invocation flows are identical for local and replicated
+  entries.
+- All forwarding and replication settings are configured by local
+  registry administrators, inbound and outbound.
+- Federation authentication follows the same OIDC-over-mTLS baseline as
+  any other interaction; there is no separate federation token system.
+- Private, non-authorized registries are fully supported for internal use
+  — standalone or internally federated — without participation in the
+  public Directory.
+
+The authoritative federation specification is `2_Scope.md` §5.1.11.
+
+## 6.4 Provenance Preservation
+
+Every Entity, Entry, and Registry record carries a `home_registry_id`
+identifying its registry of origin. Conformant registries SHALL preserve
+`home_registry_id` unchanged across all forwarding, replication, and
+re-publication. Replicated records SHALL remain discoverable by
+`home_registry_id` so consumers can distinguish records native to a
+queried registry from those replicated into it.
+
+## 6.5 Registry of Registries
+
+A Registry of Registries (RoR) MAY serve as the authoritative trust
+anchor for federation topology, publishing the set of authorized
+registries, their identifiers, their trust material, and their
+replication relationships. The RoR holds registry descriptors only; it
+holds no credentials, keys, or operational data.
+
+## 6.6 Registry Isolation
+
+The registry — and the RoR — facilitate the exchange of signed manifests
+and nothing more. They SHALL NOT hold usage tokens, credentials, keys, or
+sensitive operational data, SHALL NOT alter manifests, and SHALL NOT
+issue authentication tokens for invocations. After discovery, consumer
+and provider communicate directly; runtime interactions do not depend on
+registry availability until the discovery TTL expires.
+
+## 6.7 Availability
+
+The Directory of Authorized Registries and individual registries follow
+standard enterprise high-availability and geographic-distribution
+patterns and MAY be distributed across multiple clouds, geographies, and
+jurisdictions. Non-normative deployment guidance is provided in the SADAR
+Implementation Guidance companion.
+
+---
 
 # 7. Conformance
 
-## 7.1 Conformance Levels
+Conformance to SADAR is evaluated against the normative elements of
+`2_Scope.md` §5.1 that apply to the role an implementation plays.
+Conformance criteria, test suites, and validation rules are defined in
+the Conformance Specification companion; verification tiers
+(Self-Declared and Assessed) and certification are governed by
+`2_Scope.md` §7 and the OpenSemantics.org Charter.
 
-SADAR defines three conformance levels:
+> **Note (non-normative).** Earlier drafts defined implementation-subset
+> conformance "levels" (Core / Registry / Federation). That model is not
+> carried forward, because `2_Scope.md` §7 evaluates conformance against
+> the applicable normative elements in their entirety rather than as
+> selectable tiers. Role-based applicability is the reconciliation: an
+> implementation that is not a registry operator need not satisfy
+> registry-operator requirements, but SHALL satisfy every normative
+> requirement applicable to the role it does play.
 
-|  |  |
-| --- | --- |
-| **SADAR Core** | Implements Sections 3 (Registry Protocol), 4 (Resolver Contract), and 5 (Invocation Requirements). Mandatory for all conforming implementations. |
-| **SADAR Registry** | Implements Section 6 (Registry Architecture) in addition to Core. Required for any system acting as a SADAR registry. |
-| **SADAR Federation** | Implements Section 6.2 and 6.3 in addition to Registry. Required for registries participating in federated topologies. |
+## 7.1 Implementation Latitude
 
-## 7.2 Implementation Latitude Summary
+The following are explicitly left to the implementer and are out of
+scope for the IP licensing commitments per `2_Scope.md` §5.2:
 
-The following aspects of a compliant SADAR implementation are explicitly left to the implementer:
+- Registry storage and indexing mechanisms.
+- The resolver's selection logic.
+- Authorization policy decision and enforcement (RBAC, ABAC, zero-trust,
+  or other) applied to validated identity and authorization context.
+- The risk-score accumulation algorithm and any intervention thresholds.
+- Invocation execution, transformation, and routing mechanisms.
+- Telemetry storage, retention, and downstream processing.
+- Payment settlement mechanics.
 
-* Registry storage and indexing mechanisms
-* Semantic search algorithm (vector, keyword, hybrid, or other)
-* Policy decision logic and policy engine integration
-* Invocation execution mechanism (direct HTTP, message queue, integration engine, etc.)
-* Data transformation between the caller's format and the target service's format
-* Audit logging format, storage, and retention
-* Error recovery and circuit breaking strategies
-* Business process enforcement semantics
+---
 
 # 8. Security Considerations
 
 ## 8.1 mTLS as the Trust Foundation
 
-mTLS is mandatory rather than recommended because it provides bidirectional authentication at the transport layer, independent of application-layer credential validity. This prevents registry misdirection attacks where a client is induced to authenticate to a fraudulent registry endpoint. Even if an attacker intercepts DNS or routing, they cannot present a valid server certificate for the genuine registry IRI without access to the registry's private key.
+mTLS is mandatory rather than recommended because it provides
+bidirectional authentication at the transport layer, independent of
+application-layer credential validity. It defends against registry- and
+target-misdirection attacks: even with intercepted DNS or routing, an
+attacker cannot present a valid certificate for the genuine identifier
+without the corresponding private key.
 
-## 8.2 Credential Completeness
+## 8.2 Manifest Integrity
 
-The three-part identity requirement (Section 5.1) exists to prevent agents from acting beyond their authorized scope by substituting their own identity for the originator's. Implementations MUST validate all three identity components independently. Failure to validate any one component MUST result in invocation rejection, not degraded-mode execution.
+Manifests are publisher-signed (JWS) and immutable. Consumers SHOULD
+verify a manifest's signature against the publisher's registry-published
+key material before using it to configure an invocation; a compromised or
+substituted manifest could otherwise redirect invocations. Manifests
+SHALL NOT be used beyond their declared discovery TTL without
+revalidation.
 
-## 8.3 Manifest Integrity
+## 8.3 Bilateral Verification and Right of Refusal
 
-Implementations SHOULD verify manifest integrity using a registry-provided signature before using manifest data to configure invocations. A compromised manifest could redirect invocations to attacker-controlled endpoints. Implementations MUST respect hard\_ttl\_seconds and MUST NOT use manifests beyond their hard TTL without re-fetching from the registry.
+Discovery-time bilateral matching prevents non-qualifying requesters from
+discovering entries they could not invoke, and invocation-time bilateral
+manifest verification (§5.2) re-confirms the match fail-closed,
+independent of any registry pre-screen. Together these provide
+right-of-refusal at both the discovery and invocation layers.
 
-## 8.4 Business Process Scope Enforcement
+## 8.4 SCT Validation and Trust Models
 
-When business\_process\_id is carried in OTel baggage, implementations SHOULD verify that the invoked service is authorized within the declared business process scope. This is not mandated by the standard because enforcement mechanisms are implementation-specific, but it is strongly recommended as a defense against prompt injection attacks that attempt to cause agents to invoke out-of-scope services.
+The originator's authority is carried in the SCT under a negotiated trust
+model. Providers SHALL validate incoming SCT claims at invocation;
+for the `asserted` model the normative validation algorithm of the Trust
+Models companion applies, and all validation is fail-closed. The
+`deputy` model is preferred over `impersonation` where both are feasible,
+because it preserves agent attribution at every hop.
 
-# Appendix A: Normative References
+## 8.5 Process Scope and Out-of-Sequence Defense
 
-* RFC 2119 — Key words for use in RFCs to Indicate Requirement Levels
-* RFC 6749 — The OAuth 2.0 Authorization Framework
-* RFC 8705 — OAuth 2.0 Mutual-TLS Client Authentication
-* RFC 9068 — JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens
-* RFC 7517 — JSON Web Key (JWK)
-* RFC 7518 — JSON Web Algorithms (JWA)
-* W3C Trace Context — Distributed Tracing specification
-* W3C Baggage — OpenTelemetry Baggage specification
-* JSON Schema 2020-12
-* OpenAPI Specification 3.1
+Where a process context is declared, discovery evaluates process-context
+compatibility, and prerequisites declared in manifests allow a provider
+to require that prior steps be in scope before invocation. This is a
+defense against out-of-sequence invocation and against prompt-injection
+attempts to drive an agent to invoke out-of-context capabilities. SADAR
+supplies the context and the declarations; enforcement is the
+implementer's responsibility.
 
-# Appendix B: Example Manifest
+## 8.6 Registry Isolation as Attack-Surface Reduction
 
-{
+Because the registry is never in the runtime call path and never holds
+credentials, keys, or usage tokens, it is neither a runtime bottleneck
+nor a high-value single point of compromise. Compromise of a registry
+exposes signed, already-public manifests — not operational secrets.
 
-"entity\_iri": "urn:sadar:acme:healthcare.claims:eligibility-check",
+---
 
-"entry\_uuid": "f3a2c1d4-8b9e-4f0a-b6c7-1d2e3f4a5b6c",
+# Appendix A — Normative References
 
-"version": "3.0.1",
+- RFC 2119 / RFC 8174 — Requirement-level key words
+- RFC 6749 — OAuth 2.0 Authorization Framework
+- RFC 8705 — OAuth 2.0 Mutual-TLS Client Authentication
+- RFC 9068 — JWT Profile for OAuth 2.0 Access Tokens
+- RFC 7515 / RFC 7516 — JSON Web Signature / JSON Web Encryption
+- RFC 7517 — JSON Web Key (JWK)
+- RFC 3339 — Date and Time on the Internet: Timestamps
+- W3C Trace Context; W3C Baggage
+- OpenTelemetry specification
 
-"status": "ACTIVE",
+# Appendix B — Cross-Reference to Scope
 
-"registered\_at": "2026-01-15T14:30:00Z",
+| This document | `2_Scope.md` |
+| --- | --- |
+| §2.1 Records | §1 Overview; §5.1.1 Entity Model |
+| §2.2 Manifest | §5.1.2 Manifest Structure |
+| §2.3 Semantic grounding | §4; §5.1.16 Semantic Contracts and Identifiers |
+| §3.4 Bilateral matching | §5.1.3 |
+| §4 Resolver contract | §5.1.7; §5.1.13 Layer 2 |
+| §5.1.2 SCT / trust models | §5.1.8.2, §5.1.8.3 |
+| §5.2 Invocation verification | §5.1.3 |
+| §5.5 Telemetry & repatriation | §5.1.14 |
+| §6 Federation | §5.1.11; §5.1.12 |
+| §7 Conformance | §5.1.19; §7 |
 
-"soft\_ttl\_seconds": 3600,
+---
 
-"hard\_ttl\_seconds": 86400,
-
-"display\_name": "Member Eligibility Check",
-
-"description": "Verifies a member's current insurance eligibility and returns
-
-coverage details including plan, deductible, and copay.",
-
-"capability\_tags": ["healthcare.claims.eligibility", "insurance.member.lookup"],
-
-"domain": "healthcare.claims",
-
-"data\_classification": "PHI",
-
-"operations": [{
-
-"name": "check\_eligibility",
-
-"description": "Check eligibility for a member by ID and date of service",
-
-"input\_schema": { "$ref": "schemas/eligibility-request.json" },
-
-"output\_schema": { "$ref": "schemas/eligibility-response.json" }
-
-}],
-
-"endpoint\_uri": "https://eligibility.claims.acme.internal/v3",
-
-"protocol": "REST",
-
-"auth\_schemes": ["oidc\_client\_credentials"],
-
-"sla": { "timeout\_ms": 3000, "max\_retries": 2 },
-
-"policy\_tags": ["requires\_phi\_handling", "hipaa\_minimum\_necessary"]
-
-}
-
-End of SADAR Standard Specification | OpenSemantics.org | CC BY 4.0
+*© 2026 Cognita AI Inc. SADAR™ is a trademark of Cognita AI Inc.,
+stewarded through OpenSemantics.org. Use of the SADAR™ name or
+certification mark is governed by the OpenSemantics.org Trademark Policy.
+This specification is licensed under the Community Specification License
+1.0.*
