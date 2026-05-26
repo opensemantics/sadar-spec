@@ -10,7 +10,7 @@ Status: Draft • Combines C27 v3 (Trust Model Definitions) + C31 v1 (Asserted S
 
 ## Document Overview
 
-This specification defines the SADAR Trust Models — the four normative patterns by which an originator's identity propagates through a multi-agent flow — and the validation rules a server applies to incoming Signed Context Tokens (SCTs) under each model. The document combines two related concerns:
+This specification defines the SADAR Trust Models — the four normative patterns by which an originator's identity propagates through a multi-agent flow — and the validation rules a server applies to incoming SADAR Context Tokens (SCTs) under each model. The document combines two related concerns:
 
 Part I — Trust Model Definitions and Negotiation. The four trust models (direct\_auth, asserted, impersonation, deputy), their semantics, the originating\_user\_trust SCT claim, the supported\_trust\_models Protocol NFR, and the bilateral negotiation algorithm with tie-break rules.
 
@@ -38,11 +38,11 @@ Part II — Asserted Trust Model SCT Validation. For the asserted model specific
 | impersonation | The agent operates AS the originator at downstream services. A setuid-style pattern; the downstream service sees the originator's identity, not the agent's. Carries operational risks (loss of agent attribution at the immediate hop) but preserves originator-as-actor semantics for policy that depends on the originator's authority. |
 | deputy | The agent operates with the originator's authority but its own identity. A constrained delegation pattern; the downstream service sees both identities and may apply policy based on either or both. Generally preferred over impersonation where both identities have meaning, since attribution is preserved at every hop. |
 
-§I.2.1 — Lowercase identifiers. The model identifiers (direct\_auth, asserted, impersonation, deputy) are case-sensitive lowercase. They appear in this exact form in SCT claims and manifest NFR arrays.
+§I.2.1 — Lowercase identifiers. The model identifiers (direct\_auth, asserted, impersonation, deputy) are case-sensitive lowercase. They appear in this exact form in the SCT and manifest NFR arrays.
 
 §I.2.2 — Mutually exclusive per invocation. Each invocation operates under exactly one trust model. The model is determined by bilateral negotiation at discovery time per §I.6.
 
-## §I.3 The originating\_user\_trust SCT Claim
+## §I.3 The originating\_user\_trust SCT
 
 §I.3.1 — Every SCT chain link SHALL carry an originating\_user\_trust claim identifying the trust model under which the chain was opened. Once set at the Open operation (per C2 v2), the value persists through Continue, Hold, Authoritative Carry, and Close operations. The chain's trust model is fixed at Open.
 
