@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/SADAR_Logo.png" width="220"/>
+  <img src="/images/SADAR_Logo.png" width="220"/>
 </p>
 
 <h1 align="center">SADAR Specification</h1>
