@@ -14,7 +14,6 @@ open a Discussion-type issue or contact the steward directly.
 Once the initial non-draft Scope is published, the full
 Contribution Policy in CONTRIBUTING.md becomes operative.
 -->
-# NOTE:  SADAR's [Scope](docs/2_Scope.md) if currently in *draft* and, therefore, not finalized. 
 
 **Submitting a pull request does not by itself constitute a Contribution under CSL 1.0. PRs may be closed without merge during the Scope's draft period. See §8 of the Scope.**
 
