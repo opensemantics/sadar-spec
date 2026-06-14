@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="/images/SADAR_Logo.png" width="220"/>
+  <img src="images/SADAR_Logo.png" width="220"/>
 </p>
 
 <h1 align="center">SADAR Specification</h1>
@@ -19,7 +19,8 @@
 
 ## Usage Note
 
-The documentation within this repository represents **work in progress**.  As such, it is **subject to material changes, additions, deletions, etc.**.
+The documentation within this repository represents **work in progress**. As such, it is **subject to material changes, additions, deletions, etc.**
+
 ---
 
 ## Overview
@@ -74,25 +75,49 @@ Constraints and expectations governing agent selection and execution, including:
 
 ```plaintext
 /
-├── spec/
-│   ├── sadar-core-v0.9.md          # Normative specification text
-│   ├── manifest-schema.json         # Agent/service manifest JSON schema
-│   └── sct-schema.json              # Attribution token schema
-├── docs/
-│   ├── images/
-│   │   └── SADAR_Logo.png
-│   ├── 0_CS_Contributor_License_Agreement.md
-│   ├── 1_Community_Specification_License-v1.md
-│   ├── 2_Scope.md
-│   ├── 3_Notices.md
-│   ├── 4_License.md
-│   ├── 5_Governance.md
-│   ├── 6_Contributing.md
-│   └── 7_CS_Template.md
-├── TRADEMARKS.md
-└── README.md
-└── EXCLUSIONS.md
+├── README.md
+├── images/
+│   └── SADAR_Logo.png
+└── docs/
+    ├── CHARTER.md
+    ├── TRADEMARKS.md
+    ├── EXCLUSIONS.md
+    ├── 0_CS_Contributor_License_Agreement.md
+    ├── 1_Community_Specification_License-v1.md
+    ├── 2_Scope.md
+    ├── 3_Notices.md
+    ├── 4_License.md
+    ├── 5_Governance.md
+    ├── 6_Contributing.md
+    ├── 7_CS_Template.md
+    └── spec/
+        ├── Registry/
+        │   ├── NFRs/         # 8_NFR Schema.md
+        │   ├── discovery/    # 14_Discovery.md
+        │   └── Processes/    # SADAR_Process_Flow_Specification.md
+        ├── Security/
+        │   ├── SCT/          # 9_SCT Operations.md
+        │   └── Trust Models/ # 10_Trust Models.md
+        ├── Telemetry/        # 11_Telemetry Record and Repatriation.md
+        │                     # 13_Risk Score Specification.md
+        └── Tools/
+            └── SAI/          # 12_searchAndInvoke Telemetry and Authentication.md
 ```
+
+> Specification documents are organized by domain under `docs/spec/`. Numeric filename
+> prefixes reflect drafting order and are retained for stable cross-referencing; they
+> do not imply a required reading sequence.
+
+---
+
+## Specification Documents
+
+| Domain | Document |
+|---|---|
+| **Registry** | [NFR Schema](./docs/spec/Registry/NFRs/8_NFR%20Schema.md) · [Discovery](./docs/spec/Registry/discovery/14_Discovery.md) · [Process Flow Specification](./docs/spec/Registry/Processes/SADAR_Process_Flow_Specification.md) |
+| **Security** | [SCT Operations](./docs/spec/Security/SCT/9_SCT%20Operations.md) · [Trust Models](./docs/spec/Security/Trust%20Models/10_Trust%20Models.md) |
+| **Telemetry** | [Telemetry Record and Repatriation](./docs/spec/Telemetry/11_Telemetry%20Record%20and%20Repatriation.md) · [Risk Score Specification](./docs/spec/Telemetry/13_Risk%20Score%20Specification.md) |
+| **Tools** | [searchAndInvoke Telemetry and Authentication](./docs/spec/Tools/SAI/12_searchAndInvoke%20Telemetry%20and%20Authentication.md) |
 
 ---
 
@@ -113,10 +138,11 @@ Constraints and expectations governing agent selection and execution, including:
 | Goal | Resource |
 |---|---|
 | Understand the value proposition | [opensemantics.org/sadar](https://opensemantics.org/sadar) |
-| Contribute to the specification | [`CONTRIBUTING.md`](./docs/6_Contributing.md) |
-| Review governance | [`GOVERNANCE.md`](./docs/5_Governance.md) |
-| Trademark usage | [`TRADEMARKS.md`](./TRADEMARKS.md) |
-| Patent/IP Exclusions | [`EXCLUSIONS.md`](./EXCLUSIONS.md) |
+| Review the charter | [`CHARTER.md`](./docs/CHARTER.md) |
+| Contribute to the specification | [`Contributing`](./docs/6_Contributing.md) |
+| Review governance | [`Governance`](./docs/5_Governance.md) |
+| Trademark usage | [`TRADEMARKS.md`](./docs/TRADEMARKS.md) |
+| Patent/IP Exclusions | [`EXCLUSIONS.md`](./docs/EXCLUSIONS.md) |
 
 ---
 
@@ -142,4 +168,4 @@ The specification is stewarded by **[OpenSemantics.org](https://opensemantics.or
 
 © 2026 Cognita AI Inc. Licensed under the [Community Specification License 1.0](./docs/1_Community_Specification_License-v1.md).
 
-SADAR™ is a trademark of Cognita AI Inc. See [TRADEMARKS.md](./TRADEMARKS.md) for permitted and prohibited uses.
+SADAR™ is a trademark of Cognita AI Inc. See [TRADEMARKS.md](./docs/TRADEMARKS.md) for permitted and prohibited uses.
