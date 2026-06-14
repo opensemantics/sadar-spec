@@ -4,7 +4,7 @@
 
 *Normative specification for process flow semantics*
 
-Draft — April 2026
+Draft — June 2026
 
 # **1. Introduction**
 
