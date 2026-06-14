@@ -1,6 +1,5 @@
 # Community Specification Contribution Policy 1.0
 
-**NOTE:  The Scope of the project is currently *draft* and, therefore, not finalized.  All Pull requests will be rejected until Scope is finalized.**
 
 This document provides the contribution policy for specifications and other documents developed using the Community Specification process in a repository (each a “Working Group”).  Additional or alternate contribution policies may be adopted and documented by the Working Group.
 
