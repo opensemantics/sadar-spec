@@ -38,6 +38,34 @@ The operations are defined in abstract terms. Implementations MAY expose them th
 
 ***On chain immutability and read-only operations.*** *SCT chains are structurally immutable. Any modification to a prior segment's content invalidates that segment's JWS signature and is detected by Verify Chain Integrity (Section B.5). The four operations defined in this appendix do not include explicit "read-only" requirements because chain immutability is a property of the format, not a behavioral constraint on operations. An implementation cannot mutate a prior segment without producing a chain that fails subsequent integrity verification. The Append Segment operation produces a new chain that includes the prior segments unchanged; it does not "modify" the prior chain in any meaningful sense.*
 
+## B.0 Initiate Chain
+
+B.0.1 — A conformant implementation SHALL provide an Initiate Chain operation that, given the inputs required to construct a root segment, produces a new single-segment SCT chain. Initiate Chain is the genesis operation: it creates the chain root, where Append Segment (Section B.4) requires a pre-existing chain and cannot create one. Every SCT chain begins with exactly one Initiate Chain invocation and is extended thereafter exclusively by Append Segment.
+
+B.0.2 — Initiate Chain SHALL accept at minimum:
+
+– the issuer signing key for the root segment (the identity opening the chain; accessed via the agent's trust boundary per Section B.3.6, never through application logic)
+
+– the target recipient public key for the root segment's JWE wrap
+
+– the root claim set, satisfying the structural and semantic requirements of Section 4.6, including the `originating_user` identity and trust-model flag, the `business_process_id`, the `authority` (RFC 9396 authorization_details), and the `intent_instance_id`
+
+– the Chain Crypto Suite to be asserted for the lifetime of the chain (Section B.7.2)
+
+B.0.3 — Initiate Chain SHALL set the root segment's `intent_instance_id` per Section 4.6: seeded from the root TraceID at flow start, immutable end-to-end, and identical across trust boundaries. The `intent_instance_id` established here is the stable correlation key for the entire chain, including across remote segments where the local TraceID may legitimately differ.
+
+B.0.4 — The root segment SHALL NOT carry a `parent_sct_jti` claim. The absence of `parent_sct_jti` is the structural marker of a chain root; its presence on a segment indicates an appended (non-root) segment. An implementation encountering a segment with no `parent_sct_jti` at a position other than the chain root SHALL treat the chain as structurally invalid (CLAIM_STRUCTURE_INVALID, Section B.6).
+
+B.0.5 — Initiate Chain SHALL declare the Chain Crypto Suite (Section B.7.2) at chain initiation and bind it under the root segment's signature per Section B.7.2.5. The asserted suite SHALL govern the entire chain; Append Segment SHALL NOT alter it (Section B.4.6).
+
+B.0.6 — Initiate Chain SHALL produce an output chain whose Verify Chain Integrity (Section B.5) returns VALID and whose Validate (Section B.2) returns chain_valid = true, in each case when invoked by any party with access to the issuer's public key.
+
+B.0.7 — Initiate Chain SHALL set the root segment's `segment_action` claim (Section 4.6). The default value for a genesis execution segment is `urn:sadar:segment_action:v1:executed`. Where the opening operation is a registry-gateway routing of a non-conformant or cross-boundary call, the corresponding action IRI from the `urn:sadar:segment_action:v1:*` enumeration SHALL be set instead, signed by the appropriate actor identity per the SCT Propagation companion.
+
+B.0.8 — Error classification for Initiate Chain follows Section B.6. In particular, an absent or type-incorrect required root claim SHALL yield CLAIM_STRUCTURE_INVALID; an inaccessible signing key SHALL yield KEY_UNAVAILABLE.
+
+***Editorial note (non-normative).*** *Initiate Chain was implicit in v2 — the four operations all assumed a pre-existing chain, leaving genesis (root creation, invoked by the first searchAndInvoke in a flow) unspecified. B.0 closes that gap. It is numbered B.0 to sit ahead of Validate (B.2) while preserving the existing B.2–B.5 numbering of the four originally-specified operations. The operation count statement in B.1 is updated to include Initiate Chain.*
+
 ## B.1 Operation Set
 
 A conformant implementation SHALL support each of the four operations defined in Sections B.2 through B.5: Validate, Extract Claims, Append Segment, and Verify Chain Integrity. Each operation is defined by its inputs, outputs, preconditions, postconditions, and error classification.
