@@ -2,7 +2,7 @@
 
 *Design specification — Draft, June 2026*
 
-*Companion to 9. SCT Operations (chain operations) and §4.6 (SCT structure). Where SCT Operations defines the four abstract operations over a chain, this document defines how the chain is **carried**: across hops within an environment, across organizational/registry boundaries, and how environment-local state participates in that propagation.*
+*Companion to **SCT Structure** (segment schema), **9. SCT Operations** (chain operations), and Core Security §4.6 (orientation). Where SCT Structure defines the segment and SCT Operations defines the operations over a chain, this document defines how the chain is **carried**: across hops within an environment, across organizational/registry boundaries, and how environment-local state and context propagation participate (§8).*
 
 *© 2026 Cognita AI Inc. All rights reserved. SADAR™ is a trademark of Cognita AI, Inc. CogniWeave™ is a trademark of Cognita AI, Inc.*
 
@@ -24,7 +24,7 @@ The defining concern here is: **the SCT is per-hop mutable (re-signed at each st
 
 ### 2.1 Canonical transport
 
-The SCT is transmitted in a dedicated **`SADAR-SCT`** HTTP header on every invocation, **alongside** the OIDC usage token (in the Authorization header), never embedded within it. Both are required on every request:
+The SCT is transmitted in the **SCT Header** — the term of art for the dedicated HTTP header whose literal field name is **`SADAR-SCT`** — on every invocation, **alongside** the OIDC usage token (in the `Authorization` header), never embedded within it. (Prose refers to "the SCT Header"; the literal wire token is `SADAR-SCT`, exactly as "the Authorization header" names the literal `Authorization` field.) Both are required on every request:
 
 - The **usage token** (OAuth2/OIDC, DPoP-bound, mTLS channel) provides authentication and replay protection at the configured credential scope. Minted by the serving entity as sovereign issuer; stable and cacheable.
 - The **SCT** (`SADAR-SCT` header) provides per-invocation authorization context and chain-of-custody. Constructed and re-signed per invocation by SAI; accrues across hops independently of any authorization server.
@@ -45,7 +45,7 @@ Embedding the accruing SCT inside the OIDC token breaks three invariants:
 
 ---
 
-## 3. Custody Between Hops: Stateful SAI and the Session Store
+## 3. Custody Between Hops: Stateless SAI over a Shared Persistence Layer
 
 ### 3.1 The propagation-burden problem
 
@@ -53,18 +53,20 @@ Within an environment, *something* must carry the SCT from one hop to the next. 
 
 | Model | Framework burden | SAI burden | Where cross-hop state lives |
 |---|---|---|---|
-| **Stateless SAI** + framework propagates `SADAR-SCT` | SADAR-aware adapter per framework | None across hops | On the wire (header) |
-| **Stateful SAI** + framework propagates only TraceID | None (TraceID already propagated for OTel) | Session store keyed by TraceID | In the SAI tier |
+| **SAI propagates on the wire** | SADAR-aware adapter per framework | None across hops | On the wire (`SADAR-SCT` header) |
+| **SAI over shared persistence** (recommended in-environment) | None for the SCT (only the flow handle / context) | Read-append-write per call | In the persistence layer, keyed by the composite key (§10) |
 
-### 3.2 Stateful SAI (recommended within an environment)
+### 3.2 Stateless SAI, stateful store
 
-SAI is a **session-scoped service** keyed by the **TraceID** (the transaction-instance identifier already propagated for OTel). On each hop within the environment, SAI stores the resulting chain under the TraceID; the next SAI invocation in the same flow looks the chain up by TraceID, appends, and dispatches. The framework propagates only the TraceID and the transport token — it never handles the SCT.
+**Each SAI instance is stateless; the persistence layer holds the chain state.** On each hop, SAI reads the relevant SCT link from the store, appends its segment, and writes the result back — holding nothing between calls. This is what lets SAI scale horizontally and lets each link be resolved and signed independently (no SAI instance depends on another's memory). The store is stateful; SAI is not.
 
-**Implementation note (non-normative).** The reference implementation uses a Valkey-style store for this session state. *Valkey is an implementation choice, not a normative requirement.* The normative requirement is only that cross-hop chain custody within an environment be maintained by SAI without requiring agent or framework SCT-awareness.
+The lookup is keyed by the **composite key** defined in §10 — not by TraceID alone. (TraceID-alone is insufficient the moment a flow has parallel branches or iterates; see §10.3.)
 
-### 3.3 Statefulness does not weaken confidentiality
+**Implementation note (non-normative).** The reference implementation may use Valkey, Redis, or — for a single-process demo — an in-memory map or DiskCache. *None of these is a normative requirement.* The normative requirement is only that cross-hop chain custody within an environment be maintained by SAI without requiring agent or framework SCT-awareness, keyed such that parallel branches do not collide (§10.3). A single-process in-memory deployment (the in-address-space singleton, §10.6) needs no external store at all; persistence is required only for **durability** — surviving process restart across an async gap and providing a crash-proof audit record.
 
-The SCT is JWS-inside-JWE. Even when SAI holds the chain in session state, it can only **append and re-sign**; it cannot read prior segments for which it is not the JWE recipient. The session store holds the chain as ciphertext-bearing structure. **Statefulness saves propagation, not decryption authority.** Confidentiality is preserved exactly as on the wire.
+### 3.3 Statelessness does not weaken confidentiality
+
+The SCT is JWS-inside-JWE. Even when SAI holds the chain in the store, it can only **append and re-sign**; it cannot read prior segments for which it is not the JWE recipient. The store holds the chain as ciphertext-bearing structure. **The store saves propagation, not decryption authority.** Confidentiality is preserved exactly as on the wire.
 
 ---
 
@@ -134,9 +136,9 @@ Three identifiers do three jobs and MUST NOT be conflated:
 
 Intent binds to the **SCT chain root jti**, *not* to a span ID. Fusing intent with span ID is an error: the span changes every hop while the intent does not.
 
-### 5.2 Open normative item — Initiate Chain
+### 5.2 Initiate Chain (genesis operation)
 
-The four operations in 9. SCT Operations assume a prior chain (Append references a parent). **Root creation is not enumerated as a named operation.** A genesis-agent implementation invokes exactly this un-specified operation. Proposed addition: a **B.0 Initiate Chain** operation (inputs: intent, asserted originator, signing identity, crypto suite; output: a single-segment chain whose Verify Chain Integrity returns VALID). *Flagged for SCT Operations.*
+The four operations originally in 9. SCT Operations assume a prior chain (Append references a parent); root creation was not enumerated. A genesis-agent implementation invokes exactly that operation. **B.0 Initiate Chain** has been drafted for 9. SCT Operations (inputs: intent, asserted originator, signing identity, crypto suite; output: a single-segment chain whose Verify Chain Integrity returns VALID; the root is marked structurally by the absence of `parent_sct_jti`, with `segment_action` defaulting to `executed`). It references Core Security §4.6 `intent_instance_id` seeding so the two align.
 
 ---
 
@@ -292,26 +294,138 @@ A resource is **non-conformant** and is **not** a direct call target. A resource
 
 ---
 
-## 8. Open Decisions
+## 8. Chain Lifecycle and Context Propagation
+
+### 8.0 Framing principle — SADAR mirrors OpenTelemetry's patterns
+
+SADAR's chain-of-custody propagation **deliberately mirrors the architectural design patterns of OpenTelemetry (OTel)**. It adopts OTel's interval-bookend structure, its ambient in-process context propagation, and its inject/extract wire-propagation model — and therefore inherits OTel's **capabilities** (polyglot propagation, parent/child parenting, fan-out via copy-on-fork) and its **limitations** (context drops at un-instrumented thread-of-control forks, degrading to recorded orphan segments).
+
+SADAR **diverges** from OTel in exactly the dimensions that distinguish *authority* from *observability*:
+
+1. **Signed.** Each SCT segment is signed by its actor (non-repudiation); spans are unsigned.
+2. **Encrypted per recipient.** Segments are JWE-wrapped to their recipient (confidentiality); spans are not.
+3. **SAI-scoped.** SADAR propagates at **SAI boundaries**, not at every span. The point-sets overlap but are not identical — SADAR's are sparser and different.
+4. **Independent.** SADAR has **no functional dependency on OTel** — it uses the same *kind* of context mechanism as a *separate instance*, never OTel's own channel, and functions with OTel absent.
+
+> The mirror is of **patterns, not plumbing.** Implementers may reason about SADAR propagation using their OTel mental model, while understanding that the authority lane is signed, encrypted, SAI-scoped, and OTel-independent. The corollary for operations: *wherever your traces are clean, your chains are clean* — and wherever a trace breaks (un-instrumented fork), the chain breaks in the same place.
+
+### 8.1 The bookend model
+
+Each SAI invocation produces **two** SCT appends, not one:
+
+- An **open bookend** at **dispatch** — created when SAI is about to call a target. It mints the call's `jti`, records "calling X", and carries `parent_sct_jti` linking to the caller. It exists for the entire in-flight window.
+- A **close bookend** at **return or timeout** — references the open bookend's `jti` and carries the outcome (`step_status`, final risk adjustment, return time).
+
+A single-append model (write only on return) is rejected: it leaves no record while a call is in flight, gives children nothing to parent against during a long-running or async call, and cannot attribute a timeout. The open bookend at dispatch is what provides in-flight visibility, the parent reference for children, and the anchor a late async result reconnects to.
+
+`step_status` (Core Security §4.6) is a **close-bookend** claim — the open bookend cannot know an outcome that has not happened. Therefore an **open bookend with no matching close** is precisely the signal of an in-flight or timed-out call. A TTL/timeout sweeper synthesizes a close bookend (`step_status` = failure/timeout) when an open bookend's window expires with no return.
+
+The close bookend is a **separate, immutable append**, not an in-place update of the open bookend — consistent with the SCT chain's append-only nature. "Find in-flight/timed-out calls" is a scan for open bookends whose `jti` has no matching close.
+
+### 8.2 Structural mirror of OTel spans
+
+The bookend pair is the authority-lane mirror of an OTel span's start/end. The topology is identical:
+
+| OTel span | SCT bookend pair |
+|---|---|
+| span start | open bookend (dispatch) |
+| span end | close bookend (return/timeout) |
+| span id | the call's `jti` |
+| parent span id | `parent_sct_jti` |
+| trace id | the flow handle / `intent_instance_id` |
+| span status | `step_status` (on close) |
+| unclosed span (process died) | open bookend with no close |
+| nested spans = call tree | nested `jti`s = the chain tree |
+| sibling spans under one parent (fan-out) | sibling open-bookends under one parent `jti` |
+
+**Do not collapse the two lanes.** The shapes match; the trust does not. The span tree records *what happened* (unsigned, observability); only the SCT records *under whose authority, signed*. The SCT MUST NOT be re-derived from the trace, and the `jti` is **SADAR-minted, not the span id** — a span id is OTel-controlled and (cross-process) wire-exposed; binding it into the signed chain would import a non-authoritative, externally-influenced value into the authority lane. The `jti` *corresponds* to a span (same interval) but is its own identifier; the two MAY be cross-referenced for audit joins, never equated.
+
+### 8.3 The composite key
+
+A flow's persisted SCT links are keyed by four fields, each defeating a collision the others cannot:
+
+| Field | Defeats |
+|---|---|
+| **flow handle** (in-environment) / **`intent_instance_id`** (cross-environment) | cross-flow collision |
+| **calling step** (the caller's component id) | same flow, different caller |
+| **current step** (the called component id) | same caller, different target |
+| **call `jti`** (per-invocation, the open bookend's id) | same caller, same target, **multiple or iterated invocations** |
+
+The fourth field is essential: a step may launch the *same* target multiple times (parallel multi-call) or iterate over it (loop); those calls share the first three fields and are separated only by a per-invocation discriminator. A **UUID/`jti` is used, never a timestamp** — timestamps are neither guaranteed unique nor monotonic under concurrency. The call's open-bookend `jti` already provides this unique per-invocation id, so it serves as the fourth key directly.
+
+The first field is the flow's stable identity: a **handle** within an environment (§8.6) or **`intent_instance_id`** across environments (the local TraceID may differ in a remote segment, per Core Security §4.6).
+
+### 8.4 Parenting and fan-out via ambient context
+
+A step does not "discover" which chain it belongs to; it **inherits** its parent from the **ambient context** at the moment its segment is created — exactly as an OTel child span reads the current span from the propagation context.
+
+- **The open bookend's `jti` is the parent reference.** Because the open bookend is minted at **dispatch** (before the callee runs), the predecessor `jti` a child needs *already exists* when the child calls SAI. This is a second reason bookends open at dispatch (the first being in-flight visibility): the dispatch-time `jti` is the parenting anchor.
+- **Ambient carrier.** The current SCT `jti` rides the host language's context carrier — the *same kind* OTel uses, a *separate instance* (§8.5). A step calling SAI reads the current `jti` from that carrier as its predecessor; SAI mints the child's new `jti` and sets it as current.
+- **Fan-out = sibling subtrees, no collision.** At a fork, the context is **copied per branch** (copy-on-fork). Each parallel branch sees the *same* parent `jti` (read from its copy) and sets its *own* new `jti` as current *in its own copy*. N parallel branches all parent to the fork's open bookend and diverge by their own `jti`s — identical to OTel sibling spans, and exactly the per-branch isolation the composite key (§8.3) requires.
+
+### 8.5 SADAR-parallel context — no OTel dependency
+
+SADAR maintains its **own** context, carried by the host language's context primitive — the same *kind* OTel uses, a **separate instance** holding the current SCT `jti`:
+
+| Language | Context carrier (SADAR uses its own instance of the same kind) |
+|---|---|
+| Python | `contextvars.ContextVar` |
+| Java | `ThreadLocal` / `Context` + `Scope` |
+| Go | explicit `context.Context` (no ambient storage; threaded by hand) |
+| Node / JS | `AsyncLocalStorage` |
+| .NET | `AsyncLocal<T>` |
+| Rust | async-runtime task-locals / explicit passing |
+
+SADAR has **no functional dependency on OpenTelemetry**: it neither reads OTel's context nor writes OTel's baggage, and functions with OTel absent. (Dropping baggage as a transport, earlier in this document, removed the last functional tie to OTel; this completes the separation.) Implementations **MAY** hook the same lifecycle points an OTel integration uses (task spawn, pool submit, request send/receive) to *trigger* SADAR context propagation, but SADAR's correctness **SHALL NOT** depend on OTel being deployed.
+
+The wire transport is language-independent (the SCT Header, like W3C `traceparent`); only the in-process carrier is per-language.
+
+### 8.6 Propagation regimes and the two deployment/trust modes
+
+**SADAR sets and reads its context at SAI boundaries — which SAI owns.** The propagation points are SAI's own call sites, not OTel's spans (the two sets are not the same). Two regimes:
+
+- **In-process (ambient).** When SAI runs in the caller's thread of control, the current `jti` is ambient — the next SAI call reads it for free. **SAI owns its own forks:** when SAI dispatches to an internal target on a different thread, SAI performs the context copy itself (`copy_context()` / `ctx.run()` or the language equivalent), so its own dispatches never drop context.
+- **Across a boundary (explicit).** When the call crosses a process or environment boundary, the reference rides the **SCT Header** on the authenticated invocation request; the **receiving SAI extracts it and re-establishes the local context carrier** (inject on send, extract-and-establish on receive — the OTel symmetry). After extraction the receiver's internal flow is back in the ambient regime.
+
+**The one residual, and it is fail-soft.** If an *agent* (not SAI) forks a thread of control that does **not** carry the SADAR context and then calls SAI from it, SAI reads an empty context and records an **orphan segment** — unparented, but still recorded and visible in the logs. This is not data loss; it is graceful degradation, and it is the identical failure point where an OTel span would orphan. Agent-internal concurrency that does **not** call SAI is correctly **out of scope** (no SAI boundary, nothing to record). Framework propagation of SADAR context across the framework's *own* forks is therefore an **optional quality-of-lineage improvement**, not a correctness obligation SADAR imposes.
+
+**Two deployment/trust modes** (the choice between them *is* a security decision):
+
+- **In-address-space singleton.** A singleton SAI object, bootstrapped by the framework, generating an internal UUID handle. Every SAI call resolves to the same object — provided as an in-memory MCP server *and/or* a direct tool, both redirecting to the singleton. Non-in-memory SAI calls are disallowed **within** an environment (no mixed model); the singleton may still call out to non-in-memory agents/tools/resources, and may hand off to a remote SAI at a registry GW (§7). The SADAR key is held module-private (encapsulation against honest access). **Trust premise: all code in the address space is trusted** — there is no memory isolation from malicious in-process code, and encapsulation is a visibility convention, not a memory barrier. A single-process singleton needs no external store for the happy path; the in-memory map *is* the state.
+- **Separate-service SAI.** SAI runs as its own service behind a well-known API endpoint; the bootstrap call returns a handle (UUID) the client uses on every subsequent call. Under the covers, stateless SAIs share a persistence layer (§3). This gives **OS-enforced process isolation** — the SADAR key lives in SAI's address space, unreachable by agent code; lookup keys cross to the endpoint over an authenticated, encrypted call. This is the mode for **untrusted agent code**: the protection the singleton mode cannot provide in-process is provided here by the process boundary.
+
+The flow handle (singleton UUID, or endpoint-issued UUID) **replaces the first field of the composite key (§8.3)** within an environment; cross-environment, `intent_instance_id` is the stable join key, re-established on the far side by the GW (§7).
+
+### 8.7 Context-pointer confidentiality (parked)
+
+Whether to encrypt the in-process context pointer is **parked**. The reasoning recorded for resumption: in one address space, code that can read a contextvar can also reach the SADAR key (heap walk, closure introspection, monkeypatch), so encrypting the pointer protects nothing against the only adversary it would face — in-process malicious code — while honest code reads neither. Encryption becomes meaningful only where a real boundary exists: across the wire (handled by the authenticated SAI call / SCT Header) and at rest in a shared store (handled by the SADAR SCT Key, §4). The path to protecting the key *from agents* is therefore the **separate-service mode** (OS isolation), not contextvar encryption. The persistence-layer encryption of §4 is unaffected and remains in force.
+
+---
+
+## 9. Open Decisions
 
 | # | Decision | Status |
 |---|---|---|
 | 1 | **Header name** | **`SADAR-SCT`** (locked this session; supersedes the `SADAR-Context` placeholder in the transport-canonical note). Apply identically in §4.6, the Overview, and any wire-format/conformance text. |
 | 2 | **Operations vocabulary** | Two distinct layers, kept and labeled separately: the **crypto/chain operations** (Validate, Extract Claims, Append Segment, Verify Chain Integrity — the four in 9. SCT Operations) vs. the **lifecycle operations** (Open, Continue, Hold, Authoritative Carry, Close — referenced in 10. Trust Models). The Context Token orientation page's "five vs four" self-contradiction is a symptom of conflating these; reconcile by labeling the layers explicitly. |
-| 3 | **Initiate Chain** | Genesis root-creation is not a named SCT operation. Propose **B.0 Initiate Chain** in 9. SCT Operations (§5.2). |
-| 4 | **Session-store key derivation** | Recommended: derive the store key partly from a **secret salt inside the encrypted SCT root payload** (per-session entropy that already propagates to entitled parties), not from the cleartext root `jti` and not solely from a platform-wide key (§4.5). Confirm. |
+| 3 | **Initiate Chain** | *Drafted.* Genesis root-creation added as **B.0 Initiate Chain** in 9. SCT Operations (root has no `parent_sct_jti`; `segment_action` default `executed`; references §4.6 `intent_instance_id` seeding). Pending final insertion/commit. |
+| 4 | **Session-store key derivation** | Recommended: derive the store key partly from a **secret salt inside the encrypted SCT root payload** (per-session entropy that already propagates to entitled parties), not from the cleartext root `jti` and not solely from a platform-wide key (§4.5). **Parked** this session pending the encryption decision (§10.7). |
 | 5 | **Boundary / non-conformant action enums** | *Resolved.* Two extensible enums, defined normatively in 9. SCT Operations and referenced here: boundary action (seed `ROUTED`) and non-conformant action (seed `EXECUTED_NONCONFORMANT`). Minimal now; async variants added when that section firms up. |
 | 6 | **`sadar_conformant` NFR** | Define the field formally (URN, requester/server placement) as an ordinary mandatory-capable NFR, matched like compliance-framework / repatriation. NO_MATCH on mismatch (§7.8.3). |
-| 7 | **Async correlation contract** | *Resolved.* Platform owns correlation entirely (does what it would without SADAR); its only obligation is to pass one correlation id on both the request and response SAI calls (DIRECT lookup). SADAR stores the id on the dispatching SCT link, keys lookup on `(TraceID, correlation_id)`, continues via `parent_sct_jti`. The id is sealed within SADAR (internal + audit only); non-conformant parties must not piggyback on it (§7.8.6). |
+| 7 | **Async correlation contract** | *Resolved.* Platform owns correlation entirely (does what it would without SADAR); its only obligation is to pass one correlation id on both the request and response SAI calls (DIRECT lookup). SADAR stores the id on the dispatching SCT link, keys lookup on **`(intent_instance_id, correlation_id)`** (TraceID may differ in a remote segment), continues via `parent_sct_jti`. The id is sealed within SADAR (internal + audit only); non-conformant parties must not piggyback on it (§7.8.6). |
 | 8 | **Resource-via-tool** | Resource access reduces to tool discovery via resource-borne criteria; conformance applies to the resolved tool (§7.8.5). Full mechanics deferred — confirm the known shape is correct before deferring. |
+| 9 | **Context-propagation dependency** | *Resolved.* SADAR maintains its **own** context (same *kind* of carrier as OTel — `contextvars`/`ThreadLocal`/`context.Context`/`AsyncLocalStorage` — a *separate* instance), with **no functional dependency on OTel**. SADAR neither reads OTel's context nor writes OTel's baggage (§10.5). |
+| 10 | **Demo persistence durability** | Open. A single-process in-memory singleton needs no store for the happy path; persistence returns only for durability (async-across-restart, crash-proof audit). Confirm whether the demo must survive async-across-restart (which pulls persistence back in) or may accept in-memory-only with a stated limitation (§10.6). |
+| 11 | **Context-pointer encryption** | *Parked.* In-process contextvars are trusted with the address space (§10.7); encrypting them adds nothing against in-process code that can also reach the key. Cross-boundary the pointer rides the authenticated `SADAR-SCT`/SAI call. Revisit only if a deployment requires untrusted code in SAI's address space (→ separate-service mode). |
 
 ---
 
-## 9. Reconciliation Notes (for the SCT document set)
+## 10. Reconciliation Notes (for the SCT document set)
 
 These edits, identified during this design thread, should be applied to the existing documents:
 
-- **Core Security §4.6 (SCT structure)** — *Applied in v0.4.1.* Named the transport header **`SADAR-SCT`** (was "dedicated SCT HTTP header"), with the "alongside the OIDC usage token, both required" phrasing. Added the **`segment_action`** claim valued from `urn:sadar:segment_action:v1:*` (`executed`, `routed`, `executed_nonconformant`; extensible) — the home for the two action enums, following §4.6's existing IRI-enumeration convention (`step_status`, `risk_reason`). §4.6 already correctly says "JWS-inside-JWE" (no "signed JWT" to fix).
+- **SCT Structure** — *Created this session.* The canonical normative segment schema (envelope, claim table with carriage, enumerations including `segment_action`, required-claim-by-kind matrix). Consolidates Core Security §4.6 into formalized tables; §4.6 should be reduced to an orientation pointer to it (Open Decision in SCT Structure §9). Pending commit to `docs/spec/Security/SCT/SCT_Structure.md`.
+- **Core Security §4.6 (SCT structure)** — *Applied in v0.4.1.* Named the transport header **`SADAR-SCT`** (was "dedicated SCT HTTP header"), with the "alongside the OIDC usage token, both required" phrasing. Added the **`segment_action`** claim valued from `urn:sadar:segment_action:v1:*` (`executed`, `routed`, `executed_nonconformant`; extensible). §4.6 already correctly says "JWS-inside-JWE." *Next:* reduce §4.6 to an orientation intro + pointer to SCT Structure, to avoid schema drift.
 - **9. SCT Operations** — needs the new **B.0 Initiate Chain** operation (genesis root creation; the existing four operations all assume a prior chain — Append requires a parent). Should reference §4.6's `intent_instance_id` root-seeding (`startFlow`) so the two align. *Pending.* (The header name and enums do NOT belong here — they are §4.6 structure content, now applied there.)
 - **Context Token orientation page** — add the canonical transport block (§2.1 here); resolve the "five chain operations" vs "four abstract operations" self-contradiction per Open Decision 2; it already uses "SADAR Context Token" and "JWS-inside-JWE" correctly.
 - **10. Trust Models** — already uses "SADAR Context Token" correctly (the earlier "Signed Context Token" concern is resolved in the live file). Its Open/Continue/Hold/Authoritative Carry/Close set is the **lifecycle** layer per Open Decision 2.
