@@ -1,6 +1,6 @@
 SADAR™ searchAndInvoke Telemetry and Authentication
 
-*Specification — Version 1.1.0*
+*Specification — Version 1.2.0*
 
 Status: Draft • Tracking ID: C33 • Back-port from C21 §10.1.4 applied
 
@@ -10,13 +10,15 @@ Status: Draft • Tracking ID: C33 • Back-port from C21 §10.1.4 applied
 
 ## Document Overview
 
-This document specifies three concerns related to the operation of a SADAR-conformant searchAndInvoke (SAI) implementation:
+This document specifies four concerns related to the operation of a SADAR-conformant searchAndInvoke (SAI) implementation:
 
 Part I — Telemetry Record Helper API. The boundary between application code and SAI for constructing the per-invocation Telemetry Record (defined in C20 §5.1.14.X.2). The Helper API enforces field validation and phase-immutability so that the record meets §5.1.14.X.6.5 conformance. v1.1 adds the add\_risk\_adjustment method per §I.4.6.
 
 Part II — Repatriation Trigger Specification. The normative requirement that SAI repatriates telemetry on each agent/tool/resource call return, plus three acceptable implementation patterns for detecting that return.
 
 Part III — Authentication Scopes. The urn:sadar:scope:v1:\* namespace and initial set of OIDC scope values used by SAI when authenticating to agents/tools/resources via the §5.1.8 authentication baseline.
+
+Part IV — Invocation Environments. The normative requirement that SAI support invocation across multiple technical environments — local and remote — with the choice of supported platforms, transports, and address-space arrangements left as a non-normative implementation concern.
 
 **Cross-references.** C20 §5.1.14.X.2 (Telemetry Record schema, including risk\_score\_at\_finalize and risk\_adjustments fields per C20 v5.2). C20 §5.1.14.X.6 (OTel span structure). C20 §5.1.14.X.6.5 (Helper API requirement). C20 §5.1.14.X.10 (Telemetry Repatriation). C19 (NFR Schema, including the is\_default and impact\_score fields per C19 v1.2). C21 (Risk Score Specification — origin of the add\_risk\_adjustment method). scope.md §5.1.8 (authentication baseline). scope.md §5.1.13 (searchAndInvoke). C31 §4.6.X.10.7 (urn:sadar:error:v1:\* namespace precedent).
 
@@ -397,6 +399,62 @@ III.7.2 — JWT verification. SAI verifies tokens it presents and tokens it rece
 
 — — —
 
+# Part IV — Invocation Environments
+
+## IV.1 Purpose and Scope
+
+IV.1.1 — This Part establishes the normative requirement that a SADAR-conformant searchAndInvoke (SAI) implementation MUST be able to invoke agents, tools, and resources across multiple technical environments — both **local** (same trust domain / home registry) and **remote** (a different home registry, reached cross-environment) — and across multiple transport and address-space arrangements. It also fixes the boundary between what SAI carries and what the host platform's binding performs.
+
+IV.1.2 — Scope of Part IV. This Part specifies **what must be supported** (the environment-coverage requirement) and **the carriage contract** (opaque inputs, the SCT transport, the authority structure). It does **not** specify **how** any particular platform, framework, transport, or address-space arrangement is implemented. Which platforms an implementation supports, and the mechanism by which it reaches a given target, are non-normative implementation concerns (§IV.5).
+
+IV.1.3 — Relationship to other Parts. Part III governs how SAI authenticates to a target (the §5.1.8 baseline and the scope vocabulary). Part II governs telemetry repatriation on return. Part IV governs the **reach** of invocation — the set of technical environments across which SAI must be able to deliver a call and carry SADAR context — independent of the authentication and telemetry concerns.
+
+## IV.2 Normative Environment-Coverage Requirement
+
+IV.2.1 — **Multiple-environment support is REQUIRED.** A conformant SAI implementation SHALL be capable of invoking agents, tools, and resources in more than a single technical environment. An implementation that can reach targets in only one fixed environment (for example, only in-address-space callables, or only a single remote transport) does NOT satisfy this requirement.
+
+IV.2.2 — **Local and remote both REQUIRED.** The supported environments SHALL include both:
+
+(a) **Local invocation** — the target's home registry is the calling SAI's own home registry. The call remains within the trust domain; no boundary segment is produced.
+
+(b) **Remote invocation** — the target's home registry differs from the calling SAI's. The call crosses to the remote environment through that target's home-registry SAI Gateway (the cross-environment handoff). The SCT crosses on the wire; the receiving SAI re-establishes context in the remote environment.
+
+IV.2.3 — **Local-vs-remote is determined by home registry, not by hosting location.** The discriminator SHALL be "is the target's home registry the calling SAI's home registry?" A target homed in the caller's registry is local even if it executes at a remote URL; a target homed in a different registry is remote even if it happens to run nearby. (See the SADAR Context Token Propagation companion, boundary-crossing section, for the SAI-to-SAI handoff and the SAI Gateway.)
+
+IV.2.4 — **All invocation is SAI-to-SAI.** Whether local or remote, an invocation is mediated by SAI at both ends; the difference between local and remote is the routing decision "where is the next SAI," not a different invocation model. Local invocation may resolve the next SAI to the same in-environment SAI; remote invocation resolves it to the target's home-registry SAI Gateway.
+
+IV.2.5 — **Address-space and transport diversity REQUIRED in principle, unconstrained in choice.** The environment-coverage requirement spans differences of address space (in-process, out-of-process, networked) and transport (e.g., in-memory callable, local service endpoint, remote HTTPS). A conformant implementation SHALL support more than one such arrangement; **which** arrangements it supports is implementer's choice (§IV.5). Resources are always reached out-of-address-space and are accessed via a tool (the tool may itself be local or remote).
+
+## IV.3 Carriage Contract
+
+IV.3.1 — **Opaque inputs.** SAI SHALL carry an `inputs` payload — the data the target operates on — as **opaque** content. SAI SHALL NOT parse, validate the semantics of, or interpret the `inputs`. The shape of `inputs` is the contract between the caller and the target, declared by the target's manifest input interface; conformance of a payload to that declared interface is an enforcement-layer concern, not an SAI concern.
+
+IV.3.2 — **No system-prompt carriage.** SAI SHALL NOT carry, specify, or inject a target's system prompt, reasoning instructions, or model configuration. The target (and its binding) owns its own instruction context. SADAR delivers inputs and verified authority; it does not direct the target's cognition.
+
+IV.3.3 — **No mandated input standard.** SADAR does NOT mandate a particular input format (for example MCP or A2A). The target's manifest declares the input contract it speaks, which MAY be MCP, A2A, or any other schema; the caller constructs `inputs` to that declaration. SADAR neither imposes nor enforces a standard; it propagates the opaque payload and surfaces the manifest's declaration. (Non-normative: implementations MAY find ecosystem benefit in declaring MCP- or A2A-compatible input contracts; this is a recommendation, not a requirement.)
+
+IV.3.4 — **Authority is carried, not computed.** The functional scope-of-authority for the invocation, bound to the intent, SHALL be supplied to SAI as an RFC 9396 (RAR) structure established by the platform's authorization layer. SAI carries this authority in the SCT `authority` claim; SAI SHALL NOT establish, compute, interpret, or attenuate it. Its integrity within the chain is provided by the segment signature; a separate RAR signature is OPTIONAL and is used only where the authorization decision must be independently attributable to a distinct authorization authority.
+
+IV.3.5 — **Confidentiality of inputs.** Where `inputs` carry sensitive content, they MAY be carried within the SCT's JWE-encrypted payload wrapped to the target, so that SAI carries them without reading them. Carriage of inputs in the clear over an authenticated transport is permitted for non-sensitive payloads. The choice is a deployment concern.
+
+## IV.4 The Binding Boundary
+
+IV.4.1 — **SAI delivers to a binding; the binding performs the framework-specific invocation.** SAI's responsibility ends at delivering opaque inputs, verified authority, and SADAR context to the **binding** (adapter) for the target's technical environment. The binding — which is framework-, transport-, and address-space-specific by nature — performs the actual invocation of the target in that environment's idiom (for example, an in-memory callable, a framework task kickoff, a tool call, a message dispatch).
+
+IV.4.2 — **The binding is non-normative.** The set of bindings an implementation provides, and their internal mechanics, are implementer's choice. The same diversity of platforms (LangChain, CrewAI, MCP servers, A2A endpoints, bespoke services, etc.) is absorbed entirely in the binding layer. SADAR is binding-neutral: the normative surface is the carriage contract (§IV.3) delivered to the binding, not the binding itself.
+
+IV.4.3 — **Context propagation across the binding.** SADAR context (the current chain reference) is established and read at SAI boundaries. Across a remote boundary it is carried on the wire and re-established by the receiving SAI; within an environment it is carried by the host language's context mechanism. The binding participates in delivering the call but does not own the SADAR context lifecycle, which is SAI's. (See the SADAR Context Token Propagation companion for context-propagation requirements and their boundaries.)
+
+## IV.5 Implementation Freedom (Non-Normative)
+
+IV.5.1 — Which platforms, transports, and address-space arrangements a given SAI implementation supports is entirely the implementer's choice, subject only to the §IV.2 requirement that **more than one** environment, **including both local and remote**, be supported. A vendor may support a broad matrix of frameworks and transports or a narrow, opinionated set; both are conformant provided the minimum coverage of §IV.2 is met.
+
+IV.5.2 — The performance, robustness, and security engineering of the binding and environment layer are quality-of-implementation concerns and a legitimate axis of differentiation among conformant implementations. The specification fixes the **interoperable surface** — the SCT handoff, the carriage contract, the authentication baseline — and deliberately leaves the realization open.
+
+IV.5.3 — Two implementations are interoperable if and only if they exchange conformant SCTs at the boundary between them (§IV.2.2(b)). Their internal environment-handling, binding sets, and platform support may differ entirely and each remain conformant. What an implementation requires of its own users to participate (bootstrap, configuration, framework integration) is internal to that implementation and does not affect cross-implementation interoperability.
+
+— — —
+
 # Change Log
 
 |  |  |  |
@@ -404,5 +462,6 @@ III.7.2 — JWT verification. SAI verifies tokens it presents and tokens it rece
 | **Version** | **Date** | **Changes** |
 | 1.1.0 | April 2026 | Back-port from C21 §10.1.4 applied. Adds add\_risk\_adjustment method to Helper API §I.4.6, admissible during Invocation and Outcome phases. Method appends Adjustments to the Telemetry Record's risk\_adjustments field (C20 v5.2) and propagates to OTel Baggage at urn:sadar:baggage:v1:risk\_adjustments. Phase descriptions in §I.3 and §I.4 updated to reflect six methods. Finalize logic in §I.6.1 updated to mention risk\_score\_at\_finalize computation. Method count in §I.4 intro changed from five to six. Backwards compatible — implementations conformant to v1.0 remain conformant to v1.1; v1.1 implementations gain the add\_risk\_adjustment surface. |
 | 1.0.0 | April 2026 | Initial v1 release. Three-part document: Telemetry Record Helper API (Part I), Repatriation Trigger Specification (Part II), Authentication Scopes (Part III). Establishes urn:sadar:scope:v1:\* namespace. |
+| 1.2.0 | June 2026 | Adds Part IV (Invocation Environments): normative multiple-environment support requirement (local + remote), the carriage contract (opaque inputs, no system-prompt carriage, no mandated input standard, RAR authority carried-not-computed), and the binding boundary. Implementation of supported platforms/transports is non-normative. Backwards compatible. |
 
 *© 2026 Cognita AI Inc. All rights reserved. SADAR™ is a trademark of Cognita AI, Inc. CogniWeave™ is a trademark of Cognita AI, Inc. All other trademarks are the property of their respective owners. Licensed under the Community Specification License 1.0.*
